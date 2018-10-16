@@ -1,4 +1,19 @@
-
+#' Run the fish density simulation
+#'
+#' Executes the simulation for a given region and species.
+#'
+#'
+#' @examples
+#' ## TBD
+#'
+#' @param year Either a single year or 2 element vector with maximum and minimum year to retrieve.
+#' @param survey String for intended survey (EBS_SHELF, EBS_SLOPE, NBS_SHELF, GOA, AI).
+#'
+#' @return The output is a list of years and densities. The output must be re-joined to the Predict_data
+#' object for spatial analysis.
+#'   \item{YEARS_USE}{Vector of available years}
+#'   \item{SDM_result}{Matrix of densities per year, rows for a given year correspond to Predict_data rows.}
+#' @export
 
 	### The function belows returns a list containing the simulated species distribution (the size of list depends on the number of mcmc iteration if using the MCMC option, OR a list of 1 element containing the mean predicted distribution based on the frequentist approach) within a specific survey region boundary (defined using shapefile). The output object name is: SDM_result and the unit is kg/km2
 
