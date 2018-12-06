@@ -117,22 +117,14 @@ All_data$LATITUDE <- All_data$LATITUDE
     BS_northOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # GOA
-    GOA <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/GOAgrid_dissolved.shp")
+		GOA <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/GOA_erase.shp")
     GOA <- spTransform(GOA, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     GOAOne <- SpatialPolygons2PolySet(GOA)
 
-    #  AI
-    AI <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/ai_strata.shp")
+		# AI
+		AI <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/AI_dissolved_noland.shp")
     AI <- spTransform(AI, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     AIOne <- SpatialPolygons2PolySet(AI)
-    garder <- match(c(541, 542, 543), attr(AK_management, "PolyData")$NMFS_AREA)
-    AInew <- subset(AK_management, PID%in%garder)
-    AInew <- PolySet2SpatialPolygons(as.PolySet(AInew, projection="LL"))
-    lps <- getSpPPolygonsLabptSlots(AInew)
-    IDOneBin <- cut(lps[,1], range(lps[,1]), include.lowest=TRUE)
-    NcDissolve   <- unionSpatialPolygons(AInew ,IDOneBin)
-    AInewOne <- SpatialPolygons2PolySet(NcDissolve)
-
 
     # Merging EBS shelf and slope
     EBS <- union(EBS_shelf, EBS_slope)
@@ -195,66 +187,106 @@ All_data$LATITUDE <- All_data$LATITUDE
 
     # Now include the above regions definition into the prediction data
     ## EBS shelf
-    if(length(unique(EBS_shelfOne$SID))>1)
-    {
-      EBS_shelfRegion <- rep(0,nrow(Predict_data))
-      for (i in seq_along(unique(EBS_shelfOne$SID)))
-      {
-        temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_shelfOne, SID==i)$X, subset(EBS_shelfOne, SID==i)$Y, mode.checked=FALSE)
-        EBS_shelfRegion[which(temp==1)] <- 1
-      }
-    } else {
-      EBS_shelfRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_shelfOne, SID==1)$X, subset(EBS_shelfOne, SID==1)$Y, mode.checked=FALSE)
-    }
+			if(length(unique(EBS_shelfOne$SID))>1)
+			{
+				EBS_shelfRegion <- rep(0,nrow(Predict_data))
+				for (i in unique(EBS_shelfOne$SID))
+				{
+					if (all(diff(subset(EBS_shelfOne, SID==i)$POS)>=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_shelfOne, SID==i)$X, subset(EBS_shelfOne, SID==i)$Y, mode.checked=FALSE)
+						EBS_shelfRegion[which(temp==1)] <- 1
+					}
+					if (all(diff(subset(EBS_shelfOne, SID==i)$POS)<=0))
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_shelfOne, SID==i)$X, subset(EBS_shelfOne, SID==i)$Y, mode.checked=FALSE)
+						EBS_shelfRegion[which(temp==1)] <- 0
+					}	
+				}
+			} else {
+				EBS_shelfRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_shelfOne, SID==1)$X, subset(EBS_shelfOne, SID==1)$Y, mode.checked=FALSE)
+			}
     ## EBS slope
-    if(length(unique(EBS_slopeOne$SID))>1)
-    {
-      EBS_slopeRegion <- rep(0,nrow(Predict_data))
-      for (i in seq_along(unique(EBS_slopeOne$SID)))
-      {
-        temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_slopeOne, SID==i)$X, subset(EBS_slopeOne, SID==i)$Y, mode.checked=FALSE)
-        EBS_slopeRegion[which(temp==1)] <- 1
-      }
-    } else {
-      EBS_slopeRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_slopeOne, SID==1)$X, subset(EBS_slopeOne, SID==1)$Y, mode.checked=FALSE)
-    }
+			if(length(unique(EBS_slopeOne$SID))>1)
+			{
+				EBS_slopeRegion <- rep(0,nrow(Predict_data))
+				for (i in unique(EBS_slopeOne$SID))
+				{
+					if (all(diff(subset(EBS_slopeOne, SID==i)$POS)>=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_slopeOne, SID==i)$X, subset(EBS_slopeOne, SID==i)$Y, mode.checked=FALSE)
+						EBS_slopeRegion[which(temp==1)] <- 1
+					}
+					if (all(diff(subset(EBS_slopeOne, SID==i)$POS)<=0))
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_slopeOne, SID==i)$X, subset(EBS_slopeOne, SID==i)$Y, mode.checked=FALSE)
+						EBS_slopeRegion[which(temp==1)] <- 0
+					}	
+			  }
+			} else {
+				EBS_slopeRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(EBS_slopeOne, SID==1)$X, subset(EBS_slopeOne, SID==1)$Y, mode.checked=FALSE)
+			}
     ## EBS north
-    if(length(unique(BS_northOne$SID))>1)
-    {
-      BS_northRegion <- rep(0,nrow(Predict_data))
-      for (i in seq_along(unique(BS_northOne$SID)))
-      {
-        temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(BS_northOne, SID==i)$X, subset(BS_northOne, SID==i)$Y, mode.checked=FALSE)
-        BS_northRegion[which(temp==1)] <- 1
-      }
-    } else {
-      BS_northRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(BS_northOne, SID==1)$X, subset(BS_northOne, SID==1)$Y, mode.checked=FALSE)
-    }
+			if(length(unique(BS_northOne$SID))>1)
+			{
+				BS_northRegion <- rep(0,nrow(Predict_data))
+				for (i in unique(BS_northOne$SID))
+				{
+					if (all(diff(subset(BS_northOne, SID==i)$POS)>=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(BS_northOne, SID==i)$X, subset(BS_northOne, SID==i)$Y, mode.checked=FALSE)
+						BS_northRegion[which(temp==1)] <- 1
+					}
+					if (all(diff(subset(BS_northOne, SID==i)$POS)<=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(BS_northOne, SID==i)$X, subset(BS_northOne, SID==i)$Y, mode.checked=FALSE)
+						BS_northRegion[which(temp==1)] <- 0
+					}		
+				}
+			} else {
+				BS_northRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(BS_northOne, SID==1)$X, subset(BS_northOne, SID==1)$Y, mode.checked=FALSE)
+			}
     ## AI
     # AIRegion_new <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AInewOne, SID==1)$X, subset(AInewOne, SID==1)$Y, mode.checked=FALSE)
-    if(length(unique(AIOne$SID))>1)
-    {
-      AIRegion <- rep(0,nrow(Predict_data))
-      for (i in seq_along(unique(AIOne$SID)))
-      {
-        temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AIOne, SID==i)$X, subset(AIOne, SID==i)$Y, mode.checked=FALSE)
-        AIRegion[which(temp==1)] <- 1
-      }
-    } else {
-      AIRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AIOne, SID==1)$X, subset(AIOne, SID==1)$Y, mode.checked=FALSE)
-    }
+			if(length(unique(AIOne$SID))>1)
+			{
+				AIRegion <- rep(0,nrow(Predict_data))
+				for (i in unique(AIOne$SID))
+				{
+					if (all(diff(subset(AIOne, SID==i)$POS)>=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AIOne, SID==i)$X, subset(AIOne, SID==i)$Y, mode.checked=FALSE)
+						AIRegion[which(temp==1)] <- 1
+					}
+					if (all(diff(subset(AIOne, SID==i)$POS)<=0)) 
+					{
+						temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AIOne, SID==i)$X, subset(AIOne, SID==i)$Y, mode.checked=FALSE)
+						AIRegion[which(temp==1)] <- 0
+					}		
+				}
+			} else {
+				AIRegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(AIOne, SID==1)$X, subset(AIOne, SID==1)$Y, mode.checked=FALSE)
+			}
     ### GOA
-    if(length(unique(GOAOne$SID))>1)
-    {
-      GOARegion <- rep(0,nrow(Predict_data))
-      for (i in seq_along(unique(GOAOne$SID)))
-      {
-        temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(GOAOne, SID==i)$X, subset(GOAOne, SID==i)$Y, mode.checked=FALSE)
-        GOARegion[which(temp==1)] <- 1
-      }
-    } else {
-      GOARegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(GOAOne, SID==1)$X, subset(GOAOne, SID==1)$Y, mode.checked=FALSE)
-    }
+			if(length(unique(GOAOne$SID))>1)
+			{
+				GOARegion <- rep(0,nrow(Predict_data))
+				for (i in unique(GOAOne$SID))
+				{
+					if (i==94) 	# this is the GOA survey area map without the land masses 
+					{
+					temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(GOAOne, SID==i)$X, subset(GOAOne, SID==i)$Y, mode.checked=FALSE)
+					GOARegion[which(temp==1)] <- 1
+					}
+					if (i!=94) # this is all the land masses
+					{
+					temp <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(GOAOne, SID==i)$X, subset(GOAOne, SID==i)$Y, mode.checked=FALSE)
+					GOARegion[which(temp==1)] <- 0
+					}		
+				}
+			} else {
+				GOARegion <- point.in.polygon(Predict_data$LONG, Predict_data$LAT, subset(GOAOne, SID==1)$X, subset(GOAOne, SID==1)$Y, mode.checked=FALSE)
+			}
 
  #   Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion, AI_old=AIRegion_new)
     Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion)

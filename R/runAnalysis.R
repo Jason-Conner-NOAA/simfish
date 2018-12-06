@@ -610,9 +610,9 @@
 		    for (yr in 1:length(YEARS_USE))
 		    {
 		      new_dat <- y_hat_pred_mcmc[[yr]]
-		      Land <- which(is.na(new_dat[,3]) == TRUE)
+		      # Land <- which(is.na(new_dat[,3]) == TRUE)
 		      new_dat[Outside_survey,3] <- NA
-		      new_dat[Land,3] <- NA
+		      # new_dat[Land,3] <- NA
 		      temp[,yr] <- new_dat[,3]
 		    }
 
@@ -639,9 +639,9 @@
 		  for (yr in 1:length(YEARS_USE))
 		  {
 		    new_dat <- y_hat_pred[[yr]]
-		    Land <- which(is.na(new_dat) == TRUE)
+		    # Land <- which(is.na(new_dat) == TRUE)
 		    new_dat[Outside_survey] <- NA
-		    new_dat[Land] <- NA
+		    # new_dat[Land] <- NA
 		    temp[,yr] <- new_dat
 		  }
 
