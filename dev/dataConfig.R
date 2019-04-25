@@ -1,6 +1,8 @@
 # Load and save raw data internally to package simfish
 # Do not run this as a script
 
+
+#install.packages(c("rgeos", "maptools", "foreign")) # dependencies
 library(sp)
 library(PBSmapping)
 library(rgdal)
@@ -13,8 +15,11 @@ library(gstat)
 # Do once for the package
 # devtools::use_data_raw()
 
+# Identify working directory
+wd <- getwd()
+
 # Load csv with raw data for the simulation
-All_data <- read.csv("F:/R/simfish/data-raw/catch0.csv")
+All_data <- read.csv(paste0(wd, "/data-raw/catch0.csv"))
 
 # configure according to Kotaro's original script
 All_data$CPUE <- with(All_data, WEIGHT/(DISTANCE_FISHED * NET_WIDTH * .001)) # CPUE in kg/km^2
@@ -43,7 +48,7 @@ All_data$LATITUDE <- All_data$LATITUDE
 ### All area outside AK NMFS area is filled with NA
 
     # reading in the bathymetry file (already gridded in 2x2km for prediction)
-    Predict_data <- importShapefile("F:/R/simfish/Kotaro/shapefiles/bathy2km")
+    Predict_data <- importShapefile(paste0(wd, "/data/shapefiles/bathy2km")) # UPDATE TO ENSURE CRS MATCHES
     colnames(Predict_data) <- c("EID", "X", "Y", "PID", "pointID", "Depth")
     Predict_data$X <- Predict_data$X
     Predict_data$Y <- Predict_data$Y
@@ -52,7 +57,7 @@ All_data$LATITUDE <- All_data$LATITUDE
     LAT <- unique(Predict_data$Y)
     LONG <- unique(Predict_data$X)
 
-    AK_management <- importShapefile("F:/R/simfish/Kotaro/shapefiles/gf95_nmfs")
+    AK_management <- importShapefile(paste0(wd, "/data/shapefiles/gf95_nmfs")) # UPDATE WITH MORE APPROPRIATE FILE FOR AREA DEFINITIONS
     AK_management$X <- AK_management$X
     AK_management$Y <- AK_management$Y
 
@@ -61,7 +66,7 @@ All_data$LATITUDE <- All_data$LATITUDE
 
     garder_noms <- attr(AK_management, "PolyData")$NMFS_AREA[unique(DDD$PID)]
 
-    ### Assigning each location to a NMFS area then to a region
+    ### Assigning each location to a NMFS area then to a region- THIS IS SLOW, COULD GET RID OF SOME LINES BELOW/ABOVE IF REPLACE gf95_nmfs WITH MORE SPECIFIC SPATIAL OBJECT
     Region <- rep(NA, nrow(Predict_data))
     for (i in seq_along(unique(DDD$PID))) {
       (Area <- attr(AK_management, "PolyData")$NMFS_AREA[unique(DDD$PID)[i]])
@@ -93,7 +98,7 @@ All_data$LATITUDE <- All_data$LATITUDE
 
     ### Now import shapefiles from different AK region, reproject to same projection method, then use it to define prediction for each specific regions.
     # EBS shelf
-    EBS_shelf <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/EBS_shelfStrataNoland.shp")
+    EBS_shelf <- readOGR(dsn=paste0(wd, "/data/shapefiles/EBS_shelfStrataNoland.shp"))
     EBS_shelf <- spTransform(EBS_shelf, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     lps <- getSpPPolygonsLabptSlots(EBS_shelf)
     IDOneBin <- cut(lps[,1], range(lps[,1]), include.lowest=TRUE)
@@ -101,7 +106,7 @@ All_data$LATITUDE <- All_data$LATITUDE
     EBS_shelfOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # EBS slope
-    EBS_slope <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/EBS_slopeStrata.shp")
+    EBS_slope <- readOGR(dsn=paste0(wd, "/data/shapefiles/EBS_slopeStrata.shp"))
     EBS_slope <- spTransform(EBS_slope, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     lps <- getSpPPolygonsLabptSlots(EBS_slope)
     IDOneBin <- cut(lps[,1], range(lps[,1]), include.lowest=TRUE)
@@ -109,7 +114,7 @@ All_data$LATITUDE <- All_data$LATITUDE
     EBS_slopeOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # BS north
-    BS_north <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/NBS_shelfStrataNoland.shp")
+    BS_north <- readOGR(dsn=paste0(wd, "/data/shapefiles/NBS_shelfStrataNoland.shp"))
     BS_north <- spTransform(BS_north, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     lps <- getSpPPolygonsLabptSlots(BS_north)
     IDOneBin <- cut(lps[,1], range(lps[,1]), include.lowest=TRUE)
@@ -117,12 +122,12 @@ All_data$LATITUDE <- All_data$LATITUDE
     BS_northOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # GOA
-		GOA <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/GOA_erase.shp")
+		GOA <- readOGR(dsn=paste0(wd, "/data/shapefiles/GOA_erase.shp"))
     GOA <- spTransform(GOA, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     GOAOne <- SpatialPolygons2PolySet(GOA)
 
 		# AI
-		AI <- readOGR(dsn="F:/R/simfish/Kotaro/shapefiles/AI_dissolved_noland.shp")
+		AI <- readOGR(dsn=paste0(wd, "/data/shapefiles/AI_dissolved_noland.shp"))
     AI <- spTransform(AI, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     AIOne <- SpatialPolygons2PolySet(AI)
 
@@ -157,7 +162,8 @@ All_data$LATITUDE <- All_data$LATITUDE
       m <- autofitVariogram(SURFACE_TEMPERATURE~1, dat1)
       plot(m)
       v <- variogram(SURFACE_TEMPERATURE~1, dat1)	#create a variogram of the sorting data
-      m <- fit.variogram(v, vgm(psill=m$var_model[2,2], model=as.character(m$var_model[2,1]), range=m$var_model[2,3], nugget =m$var_model[1,2], kappa=m$var_model[2,4]))    #fit a model to the variogram
+      m <- fit.variogram(v, vgm(psill=m$var_model[2,2], model=as.character(m$var_model[2,1]), range=m$var_model[2,3], nugget =m$var_model[1,2], kappa=m$var_model[2,4])) #fit a model to the variogram
+      # GETTING SOME CONVERGENCE WARNINGS FROM FIT.VARIOGRAM ABOVE, BUT PLOTTED VARIOGRAMS LOOK DECENT
       plot(v, model= m)
 
       EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3)]))
@@ -170,12 +176,12 @@ All_data$LATITUDE <- All_data$LATITUDE
       m <- autofitVariogram(GEAR_TEMPERATURE~1, dat1)
       plot(m)
       v <- variogram(GEAR_TEMPERATURE~1, dat1)	#create a variogram of the sorting data
-      m <- fit.variogram(v, vgm(psill=m$var_model[2,2], model=as.character(m$var_model[2,1]), range=m$var_model[2,3], nugget =m$var_model[1,2], kappa=m$var_model[2,4]))    #fit a model to the variogram
+      m <- fit.variogram(v, vgm(psill=m$var_model[2,2], model=as.character(m$var_model[2,1]), range=m$var_model[2,3], nugget=m$var_model[1,2], kappa=m$var_model[2,4]))    #fit a model to the variogram
       plot(v, model= m)
 
       EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3)]))
       g <- gstat(id = "GEAR_TEMPERATURE", formula = GEAR_TEMPERATURE~1, data=dat1, model = m, nmax=5)
-      raster_temp_bottom[[yr]] <- raster::interpolate(EBS.bathym, g, xyOnly=TRUE, progress="text",overwrite=TRUE ) #Interpolate the object to a raster
+      raster_temp_bottom[[yr]] <- raster::interpolate(EBS.bathym, g, xyOnly=TRUE, progress="text", overwrite=TRUE) #Interpolate the object to a raster
     }
 
     EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3,6)]))
@@ -291,7 +297,7 @@ All_data$LATITUDE <- All_data$LATITUDE
  #   Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion, AI_old=AIRegion_new)
     Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion)
 
-    save(Predict_data, file="F:/R/simfish/data-raw/Predict_data.Rdata")
+    save(Predict_data, file=paste0(wd, "/data-raw/Predict_data.Rdata"))
 
 
-devtools::use_data(All_data, Predict_data, internal = F, overwrite=T)
+devtools::use_data(All_data, Predict_data, internal = FALSE, overwrite = TRUE)
