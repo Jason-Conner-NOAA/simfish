@@ -4,4 +4,5 @@
 .Ruserdata
 data/
 data-raw/
+output/
 simfish.Rproj

@@ -204,8 +204,6 @@
 
 		### Creating the design matrix for prediction (by year)
 		DESIGN.pred	<-	list()
-		where_land <- which(Predict_data$BOTTOM_DEPTH<=0)
-		Predict_data$BOTTOM_DEPTH <- replace(Predict_data$BOTTOM_DEPTH, where_land, NA)
 
 		if (any(Transform_covariate == "LOG"))
 		{
