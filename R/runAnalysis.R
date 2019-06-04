@@ -85,6 +85,7 @@
 		Env_covariate_base <- Env_covariate
 		select_col <- match(c('YEAR','LONGITUDE','LATITUDE','CPUE','SURVEY_NAME',Env_covariate_base), colnames(Data_work))
 		Data_work <- Data_work[,select_col]
+		Data_work <- Data_work[complete.cases(Data_work),] # remove observations with missing data
 
 		if (any(Transform_covariate == "LOG"))
 		{
@@ -208,8 +209,11 @@
 		if (any(Transform_covariate == "LOG"))
 		{
 		  which_log <- which(Transform_covariate == "LOG")
-		  colnames(Predict_data)[match(Env_covariate_base[which_log],colnames(Predict_data))] <- paste0("LOG_",Env_covariate_base[which_log])
-		  Predict_data[,match(Env_covariate[which_log],colnames(Predict_data))] <- log(Predict_data[,match(Env_covariate[which_log],colnames(Predict_data))])
+		  to_change <- match(Env_covariate_base[which_log],colnames(Predict_data))
+		  colnames(Predict_data)[to_change] <- paste0("LOG_",Env_covariate_base[which_log])
+		  Predict_data[!is.na(Predict_data[,to_change]),to_change] <- ifelse(Predict_data[!is.na(Predict_data[,to_change]),to_change]>0, 
+		                                                                     log(Predict_data[!is.na(Predict_data[,to_change]),to_change]), 
+		                                                                     min(log(Data_work[,to_change])))  # trying to deal with the issue of NA for any depth<=0 (i.e. land masses). In this example, I arbitrarily assigned a value of 10 for all depth<=0. But keep in mind that this value might have an affect on the overall prediction (if depth is an important covariate, which is likely the case)
 		}
 
 		for(j in 1:length(YEARS_pred))
