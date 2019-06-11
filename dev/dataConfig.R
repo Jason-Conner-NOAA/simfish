@@ -45,7 +45,7 @@ All_data$LATITUDE <- All_data$LATITUDE
 ### This means that for years without survey, these predictions could be pretty vague.
 
 # Narrow prediction extent to nnmfs area polygon shapefile
-simplenmfs <- readOGR(dsn="data/AKmaps_bathy",layer="simplenmfs") 
+simplenmfs <- readOGR(dsn=paste0(getwd(),"/data/shapefiles"),layer="simplenmfs") 
 
 # get bathymetry for prediction extent, working around antimeridian
 bathy1 <- getNOAA.bathy(lon1 = extent(simplenmfs)@xmin, lon2 = 180, lat1 = extent(simplenmfs)@ymin, lat2 = extent(simplenmfs)@ymax, resolution = 2)
@@ -90,7 +90,7 @@ Predict_data$BOTTOM_DEPTH <- -Predict_data$BOTTOM_DEPTH
     BS_northOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # GOA
-		GOA <- readOGR(dsn=paste0(getwd(), "/data/shapefiles/GOA_erase.shp"))
+		GOA <- readOGR(dsn=paste0(getwd(), "/data/shapefiles/GOA_dissolved_noland.shp"))
     GOA <- spTransform(GOA, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     GOAOne <- SpatialPolygons2PolySet(GOA)
 
@@ -264,8 +264,8 @@ Predict_data$BOTTOM_DEPTH <- -Predict_data$BOTTOM_DEPTH
 
  #   Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion, AI_old=AIRegion_new)
     Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion)
-
-    save(Predict_data, file=paste0(getwd(), "/data-raw/Predict_data.Rdata"))
+    #hist(filter(Predict_data, GOA == 1)$BOTTOM_DEPTH) # check how many records of negative depths for GOA
+    #save(Predict_data, file=paste0(getwd(), "/data/Predict_data.Rda"))
 
 
 devtools::use_data(All_data, Predict_data, internal = FALSE, overwrite = TRUE)
