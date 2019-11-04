@@ -3,12 +3,15 @@
 
 
 #install.packages(c("rgeos", "maptools", "foreign")) # dependencies
+library(tidyverse)
 library(sp)
 library(PBSmapping)
 library(rgdal)
 library(raster)
 library(automap)
 library(gstat)
+library(marmap)
+library(maptools)
 
 
 
@@ -36,62 +39,30 @@ All_data$LONGITUDE <- All_data$LONGITUDE
 All_data$LATITUDE <- All_data$LATITUDE
 
 
-### From Kotaro's original code, once run on an All_data set can be reused
-
-### Prepare the model for prediction: Output is a 2x2km grids all over Alaska.
+### Prepare the prediction grid
 ### WARNING: Prediction/extrapolation of environmental covariate (i.e. temperature) is based on the survey data.
 ### The approach is based on fitting the best variogram model for each covariate and year, then extrapolate to other areas
 ### This means that for years without survey, these predictions could be pretty vague.
-### All area outside AK NMFS area is filled with NA
 
-    # reading in the bathymetry file (already gridded in 2x2km for prediction)
-    Predict_data <- importShapefile(paste0(getwd(), "/data/shapefiles/bathy2km")) # UPDATE TO ENSURE CRS MATCHES
-    colnames(Predict_data) <- c("EID", "X", "Y", "PID", "pointID", "Depth")
-    Predict_data$X <- Predict_data$X
-    Predict_data$Y <- Predict_data$Y
+# Narrow prediction extent to nnmfs area polygon shapefile
+simplenmfs <- readOGR(dsn=paste0(getwd(),"/data/shapefiles"),layer="simplenmfs") 
 
-    # # need to change the projection for the above data
-    LAT <- unique(Predict_data$Y)
-    LONG <- unique(Predict_data$X)
+# get bathymetry for prediction extent, working around antimeridian
+bathy1 <- getNOAA.bathy(lon1 = extent(simplenmfs)@xmin, lon2 = 180, lat1 = extent(simplenmfs)@ymin, lat2 = extent(simplenmfs)@ymax, resolution = 2)
+bathy2 <- getNOAA.bathy(lon1 = -180, lon2 = -130, lat1 = extent(simplenmfs)@ymin, lat2 = extent(simplenmfs)@ymax, resolution = 2)
+temp <- fortify.bathy(bathy2)
+temp$x[temp$x<0] <- temp$x[temp$x<0] + 360
+Predict_data <- bind_rows(fortify.bathy(bathy1),temp)
+Predict_data$x <- Predict_data$x-360
+Predict_data = as.raster(as.bathy(Predict_data))
+Predict_data = projectRaster(Predict_data, crs = "+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+#> res(Predict_data)
+#[1] 1940 3690 # 2 arc minute
+#[1] 1460 2770 # 1.5 arc minute
+Predict_data = as.xyz(as.bathy(Predict_data))
+colnames(Predict_data) <- c("X", "Y", "BOTTOM_DEPTH")
+Predict_data$BOTTOM_DEPTH <- -Predict_data$BOTTOM_DEPTH
 
-    AK_management <- importShapefile(paste0(getwd(), "/data/shapefiles/gf95_nmfs")) # UPDATE WITH MORE APPROPRIATE FILE FOR AREA DEFINITIONS
-    AK_management$X <- AK_management$X
-    AK_management$Y <- AK_management$Y
-
-    garder <- which(attr(AK_management, "PolyData")$NMFS_AREA>0 & attr(AK_management, "PolyData")$NMFS_AREA<=650)
-    DDD <- subset(AK_management, PID%in%garder)
-
-    garder_noms <- attr(AK_management, "PolyData")$NMFS_AREA[unique(DDD$PID)]
-
-    ### Assigning each location to a NMFS area then to a region- THIS IS SLOW, COULD GET RID OF SOME LINES BELOW/ABOVE IF REPLACE gf95_nmfs WITH MORE SPECIFIC SPATIAL OBJECT
-    Region <- rep(NA, nrow(Predict_data))
-    for (i in seq_along(unique(DDD$PID))) {
-      (Area <- attr(AK_management, "PolyData")$NMFS_AREA[unique(DDD$PID)[i]])
-      new <- subset(DDD, PID==unique(DDD$PID)[i])
-      asd <- new[which(new$SID==1),]
-      aaa <- point.in.polygon(Predict_data[,2], Predict_data[,3], asd$X, asd$Y, mode.checked=FALSE)
-      Region[which(aaa == 1)] <- garder_noms[i]
-    }
-
-    Survey <- ifelse(Region %in% c(610, 620, 630, 640, 650), "GOA",
-                     ifelse(Region %in% c(541, 542, 543), "AI",
-                            ifelse(Region %in% c(508,509,512,513,514,516,517,518,519,521,523,524,530,550), "EBS_SHELF", "NA")
-                            )
-                     )
-
-    Predict_data$Survey <- Survey
-    Predict_data$Region <- Region
-
-    Predict_data <- subset(Predict_data, subset=c(Survey != "NA"))
-    Predict_data_save <- Predict_data
-
-    ### Only keep results for the whole Alaska NMFS management area. Exclude all other data points.
-    Predict_data$Depth <- -Predict_data$Depth
-    LAT <- sort(unique(Predict_data$Y))
-    LONG <- sort(unique(Predict_data$X))
-
-    Proj_data = expand.grid(X=sort(unique(LONG)), Y=sort(unique(LAT)))
-    xydata <- Predict_data[,2:3]
 
     ### Now import shapefiles from different AK region, reproject to same projection method, then use it to define prediction for each specific regions.
     # EBS shelf
@@ -119,7 +90,7 @@ All_data$LATITUDE <- All_data$LATITUDE
     BS_northOne <- SpatialPolygons2PolySet(NcDissolve)
 
     # GOA
-		GOA <- readOGR(dsn=paste0(getwd(), "/data/shapefiles/GOA_erase.shp"))
+		GOA <- readOGR(dsn=paste0(getwd(), "/data/shapefiles/GOA_dissolved_noland.shp"))
     GOA <- spTransform(GOA, CRS("+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"))
     GOAOne <- SpatialPolygons2PolySet(GOA)
 
@@ -163,9 +134,9 @@ All_data$LATITUDE <- All_data$LATITUDE
       # GETTING SOME CONVERGENCE WARNINGS FROM FIT.VARIOGRAM ABOVE, BUT PLOTTED VARIOGRAMS LOOK DECENT
       plot(v, model= m)
 
-      EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3)]))
+      bathy <- rasterFromXYZ(Predict_data[,c(1,2)])
       g <- gstat(id = "SURFACE_TEMPERATURE", formula = SURFACE_TEMPERATURE~1, data=dat1, model = m, nmax=5)
-      raster_temp_surf[[yr]]  <- raster::interpolate(EBS.bathym, g, xyOnly=TRUE, progress="text",overwrite=TRUE ) #Interpolate the object to a raster
+      raster_temp_surf[[yr]]  <- raster::interpolate(bathy, g, xyOnly=TRUE, progress="text",overwrite=TRUE ) #Interpolate the object to a raster
 
       # For gear temperature
       dat1 <- subset(dat_new, subset=c(YEAR == YEARS[yr]))
@@ -176,16 +147,16 @@ All_data$LATITUDE <- All_data$LATITUDE
       m <- fit.variogram(v, vgm(psill=m$var_model[2,2], model=as.character(m$var_model[2,1]), range=m$var_model[2,3], nugget=m$var_model[1,2], kappa=m$var_model[2,4]))    #fit a model to the variogram
       plot(v, model= m)
 
-      EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3)]))
+      bathy <- rasterFromXYZ(Predict_data[,c(1,2)])
       g <- gstat(id = "GEAR_TEMPERATURE", formula = GEAR_TEMPERATURE~1, data=dat1, model = m, nmax=5)
-      raster_temp_bottom[[yr]] <- raster::interpolate(EBS.bathym, g, xyOnly=TRUE, progress="text", overwrite=TRUE) #Interpolate the object to a raster
+      raster_temp_bottom[[yr]] <- raster::interpolate(bathy, g, xyOnly=TRUE, progress="text", overwrite=TRUE) #Interpolate the object to a raster
     }
 
-    EBS.bathym <- rasterFromXYZ(data.frame(Predict_data[,c(2,3,6)]))
+    bathy <- rasterFromXYZ(Predict_data)
 
     # save the data for the whole area
     Grids <- expand.grid(LONG=sort(unique(Predict_data$X)), LAT=sort(unique(Predict_data$Y)))
-    Predict_data <- data.frame(Grids, BOTTOM_DEPTH = extract(EBS.bathym, Grids), SURFACE_TEMPERATURE1982=extract(raster_temp_surf[[1]], Grids), SURFACE_TEMPERATURE1983= extract(raster_temp_surf[[2]], Grids), SURFACE_TEMPERATURE1984= extract(raster_temp_surf[[3]], Grids), SURFACE_TEMPERATURE1985= extract(raster_temp_surf[[4]], Grids), SURFACE_TEMPERATURE1986= extract(raster_temp_surf[[5]], Grids), SURFACE_TEMPERATURE1987= extract(raster_temp_surf[[6]], Grids), SURFACE_TEMPERATURE1988= extract(raster_temp_surf[[7]], Grids), SURFACE_TEMPERATURE1989= extract(raster_temp_surf[[8]], Grids), SURFACE_TEMPERATURE1990= extract(raster_temp_surf[[9]], Grids), SURFACE_TEMPERATURE1991= extract(raster_temp_surf[[10]], Grids), SURFACE_TEMPERATURE1992= extract(raster_temp_surf[[11]], Grids), SURFACE_TEMPERATURE1993= extract(raster_temp_surf[[12]], Grids), SURFACE_TEMPERATURE1994= extract(raster_temp_surf[[13]], Grids), SURFACE_TEMPERATURE1995= extract(raster_temp_surf[[14]], Grids), SURFACE_TEMPERATURE1996= extract(raster_temp_surf[[15]], Grids), SURFACE_TEMPERATURE1997= extract(raster_temp_surf[[16]], Grids), SURFACE_TEMPERATURE1998= extract(raster_temp_surf[[17]], Grids), SURFACE_TEMPERATURE1999= extract(raster_temp_surf[[18]], Grids), SURFACE_TEMPERATURE2000= extract(raster_temp_surf[[19]], Grids), SURFACE_TEMPERATURE2001= extract(raster_temp_surf[[20]], Grids), SURFACE_TEMPERATURE2002= extract(raster_temp_surf[[21]], Grids), SURFACE_TEMPERATURE2003= extract(raster_temp_surf[[22]], Grids), SURFACE_TEMPERATURE2004= extract(raster_temp_surf[[23]], Grids), SURFACE_TEMPERATURE2005= extract(raster_temp_surf[[24]], Grids), SURFACE_TEMPERATURE2006= extract(raster_temp_surf[[25]], Grids), SURFACE_TEMPERATURE2007= extract(raster_temp_surf[[26]], Grids), SURFACE_TEMPERATURE2008= extract(raster_temp_surf[[27]], Grids), SURFACE_TEMPERATURE2009= extract(raster_temp_surf[[28]], Grids), SURFACE_TEMPERATURE2010= extract(raster_temp_surf[[29]], Grids), SURFACE_TEMPERATURE2011= extract(raster_temp_surf[[30]], Grids), SURFACE_TEMPERATURE2012= extract(raster_temp_surf[[31]], Grids), SURFACE_TEMPERATURE2013= extract(raster_temp_surf[[32]], Grids), SURFACE_TEMPERATURE2014= extract(raster_temp_surf[[33]], Grids), SURFACE_TEMPERATURE2015= extract(raster_temp_surf[[34]], Grids), SURFACE_TEMPERATURE2016= extract(raster_temp_surf[[35]], Grids),
+    Predict_data <- data.frame(Grids, BOTTOM_DEPTH = extract(bathy, Grids), SURFACE_TEMPERATURE1982=extract(raster_temp_surf[[1]], Grids), SURFACE_TEMPERATURE1983= extract(raster_temp_surf[[2]], Grids), SURFACE_TEMPERATURE1984= extract(raster_temp_surf[[3]], Grids), SURFACE_TEMPERATURE1985= extract(raster_temp_surf[[4]], Grids), SURFACE_TEMPERATURE1986= extract(raster_temp_surf[[5]], Grids), SURFACE_TEMPERATURE1987= extract(raster_temp_surf[[6]], Grids), SURFACE_TEMPERATURE1988= extract(raster_temp_surf[[7]], Grids), SURFACE_TEMPERATURE1989= extract(raster_temp_surf[[8]], Grids), SURFACE_TEMPERATURE1990= extract(raster_temp_surf[[9]], Grids), SURFACE_TEMPERATURE1991= extract(raster_temp_surf[[10]], Grids), SURFACE_TEMPERATURE1992= extract(raster_temp_surf[[11]], Grids), SURFACE_TEMPERATURE1993= extract(raster_temp_surf[[12]], Grids), SURFACE_TEMPERATURE1994= extract(raster_temp_surf[[13]], Grids), SURFACE_TEMPERATURE1995= extract(raster_temp_surf[[14]], Grids), SURFACE_TEMPERATURE1996= extract(raster_temp_surf[[15]], Grids), SURFACE_TEMPERATURE1997= extract(raster_temp_surf[[16]], Grids), SURFACE_TEMPERATURE1998= extract(raster_temp_surf[[17]], Grids), SURFACE_TEMPERATURE1999= extract(raster_temp_surf[[18]], Grids), SURFACE_TEMPERATURE2000= extract(raster_temp_surf[[19]], Grids), SURFACE_TEMPERATURE2001= extract(raster_temp_surf[[20]], Grids), SURFACE_TEMPERATURE2002= extract(raster_temp_surf[[21]], Grids), SURFACE_TEMPERATURE2003= extract(raster_temp_surf[[22]], Grids), SURFACE_TEMPERATURE2004= extract(raster_temp_surf[[23]], Grids), SURFACE_TEMPERATURE2005= extract(raster_temp_surf[[24]], Grids), SURFACE_TEMPERATURE2006= extract(raster_temp_surf[[25]], Grids), SURFACE_TEMPERATURE2007= extract(raster_temp_surf[[26]], Grids), SURFACE_TEMPERATURE2008= extract(raster_temp_surf[[27]], Grids), SURFACE_TEMPERATURE2009= extract(raster_temp_surf[[28]], Grids), SURFACE_TEMPERATURE2010= extract(raster_temp_surf[[29]], Grids), SURFACE_TEMPERATURE2011= extract(raster_temp_surf[[30]], Grids), SURFACE_TEMPERATURE2012= extract(raster_temp_surf[[31]], Grids), SURFACE_TEMPERATURE2013= extract(raster_temp_surf[[32]], Grids), SURFACE_TEMPERATURE2014= extract(raster_temp_surf[[33]], Grids), SURFACE_TEMPERATURE2015= extract(raster_temp_surf[[34]], Grids), SURFACE_TEMPERATURE2016= extract(raster_temp_surf[[35]], Grids),
                                GEAR_TEMPERATURE1982= extract(raster_temp_bottom[[1]], Grids), GEAR_TEMPERATURE1983= extract(raster_temp_bottom[[2]], Grids), GEAR_TEMPERATURE1984= extract(raster_temp_bottom[[3]], Grids), GEAR_TEMPERATURE1985= extract(raster_temp_bottom[[4]], Grids), GEAR_TEMPERATURE1986= extract(raster_temp_bottom[[5]], Grids), GEAR_TEMPERATURE1987= extract(raster_temp_bottom[[6]], Grids), GEAR_TEMPERATURE1988= extract(raster_temp_bottom[[7]], Grids), GEAR_TEMPERATURE1989= extract(raster_temp_bottom[[8]], Grids), GEAR_TEMPERATURE1990= extract(raster_temp_bottom[[9]], Grids), GEAR_TEMPERATURE1991= extract(raster_temp_bottom[[10]], Grids), GEAR_TEMPERATURE1992= extract(raster_temp_bottom[[11]], Grids), GEAR_TEMPERATURE1993= extract(raster_temp_bottom[[12]], Grids), GEAR_TEMPERATURE1994= extract(raster_temp_bottom[[13]], Grids), GEAR_TEMPERATURE1995= extract(raster_temp_bottom[[14]], Grids), GEAR_TEMPERATURE1996= extract(raster_temp_bottom[[15]], Grids), GEAR_TEMPERATURE1997= extract(raster_temp_bottom[[16]], Grids), GEAR_TEMPERATURE1998= extract(raster_temp_bottom[[17]], Grids), GEAR_TEMPERATURE1999= extract(raster_temp_bottom[[18]], Grids), GEAR_TEMPERATURE2000= extract(raster_temp_bottom[[19]], Grids), GEAR_TEMPERATURE2001= extract(raster_temp_bottom[[20]], Grids), GEAR_TEMPERATURE2002= extract(raster_temp_bottom[[21]], Grids), GEAR_TEMPERATURE2003= extract(raster_temp_bottom[[22]], Grids), GEAR_TEMPERATURE2004= extract(raster_temp_bottom[[23]], Grids), GEAR_TEMPERATURE2005= extract(raster_temp_bottom[[24]], Grids), GEAR_TEMPERATURE2006= extract(raster_temp_bottom[[25]], Grids), GEAR_TEMPERATURE2007= extract(raster_temp_bottom[[26]], Grids), GEAR_TEMPERATURE2008= extract(raster_temp_bottom[[27]], Grids), GEAR_TEMPERATURE2009= extract(raster_temp_bottom[[28]], Grids), GEAR_TEMPERATURE2010= extract(raster_temp_bottom[[29]], Grids), GEAR_TEMPERATURE2011= extract(raster_temp_bottom[[30]], Grids), GEAR_TEMPERATURE2012= extract(raster_temp_bottom[[31]], Grids), GEAR_TEMPERATURE2013= extract(raster_temp_bottom[[32]], Grids), GEAR_TEMPERATURE2014= extract(raster_temp_bottom[[33]], Grids), GEAR_TEMPERATURE2015= extract(raster_temp_bottom[[34]], Grids), GEAR_TEMPERATURE2016= extract(raster_temp_bottom[[35]], Grids))
 
     # Now include the above regions definition into the prediction data
@@ -293,8 +264,8 @@ All_data$LATITUDE <- All_data$LATITUDE
 
  #   Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion, AI_old=AIRegion_new)
     Predict_data <- data.frame(Predict_data, EBS=EBS_shelfRegion, SLP=EBS_slopeRegion, NBS=BS_northRegion, GOA=GOARegion, AI=AIRegion)
-
-    save(Predict_data, file=paste0(getwd(), "/data-raw/Predict_data.Rdata"))
+    hist(filter(Predict_data, GOA == 1)$BOTTOM_DEPTH)
+    save(Predict_data, file=paste0(getwd(), "/data/Predict_data.Rda"))
 
 
 devtools::use_data(All_data, Predict_data, internal = FALSE, overwrite = TRUE)
