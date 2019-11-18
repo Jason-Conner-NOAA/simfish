@@ -212,7 +212,7 @@
 		  to_change <- match(Env_covariate_base[which_log],colnames(Predict_data))
 		  colnames(Predict_data)[to_change] <- paste0("LOG_",Env_covariate_base[which_log])
 		  # dealing with depth<=0 (i.e. land masses and erroneous bathymetry). Here we replace these entries with the minimum haul depth for the region.
-		  Predict_data[!is.na(Predict_data[,to_change]) & Predict_data[,to_change]<=0,to_change] <- min(Data_work[,to_change])
+		  Predict_data[!is.na(Predict_data[,to_change]) & Predict_data[,to_change]<=0,to_change] <- min(Data_work[,Env_covariate_base[which_log]])
 		  Predict_data[!is.na(Predict_data[,to_change]),to_change] <- log(Predict_data[!is.na(Predict_data[,to_change]),to_change])
 		}
 
