@@ -211,9 +211,9 @@
 		  which_log <- which(Transform_covariate == "LOG")
 		  to_change <- match(Env_covariate_base[which_log],colnames(Predict_data))
 		  colnames(Predict_data)[to_change] <- paste0("LOG_",Env_covariate_base[which_log])
-		  Predict_data[!is.na(Predict_data[,to_change]),to_change] <- ifelse(Predict_data[!is.na(Predict_data[,to_change]),to_change]>0, 
-		                                                                     log(Predict_data[!is.na(Predict_data[,to_change]),to_change]), 
-		                                                                     min(log(Data_work[,to_change])))  # trying to deal with the issue of NA for any depth<=0 (i.e. land masses). In this example, I arbitrarily assigned a value of 10 for all depth<=0. But keep in mind that this value might have an affect on the overall prediction (if depth is an important covariate, which is likely the case)
+		  # dealing with depth<=0 (i.e. land masses and erroneous bathymetry). Here we replace these entries with the minimum haul depth for the region.
+		  Predict_data[!is.na(Predict_data[,to_change]) & Predict_data[,to_change]<=0,to_change] <- exp(min(Data_work[,paste0("LOG_",Env_covariate_base[which_log])]))
+		  Predict_data[!is.na(Predict_data[,to_change]),to_change] <- log(Predict_data[!is.na(Predict_data[,to_change]),to_change])
 		}
 
 		for(j in 1:length(YEARS_pred))
