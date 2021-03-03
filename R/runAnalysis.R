@@ -128,19 +128,23 @@
 
 		if (all(c("AI") %in% Which_region)) Data_work$LONGITUDE[which(Data_work$LONGITUDE>0)] <- Data_work$LONGITUDE[which(Data_work$LONGITUDE>0)]-360
 		Coord <- cbind(Data_work$LONGITUDE, Data_work$LATITUDE)					# the coordinates
-		bnd = inla.nonconvex.hull(Coord, convex=200000)		# I need to get the boundary limit of the region on interest
-		if (all(sort(c("EBS", "SLP", "AI", "GOA")) == sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("AI", "GOA")) == sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("EBS", "GOA"))== sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("EBS", "SLP"))== sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("EBS") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("SLP") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,2000000), cutoff = 75000, offset=c(50000,100000))
-		if (all(c("GOA") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("AI") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(50000,100000))
+		# bnd = inla.nonconvex.hull(Coord, convex=200000)		# I need to get the boundary limit of the region on interest
+		# if (all(sort(c("EBS", "SLP", "AI", "GOA")) == sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("AI", "GOA")) == sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("EBS", "GOA"))== sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("EBS", "SLP"))== sort(Which_region))) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("EBS") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("SLP") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,2000000), cutoff = 75000, offset=c(50000,100000))
+		# if (all(c("GOA") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("AI") == Which_region)) mesh = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(50000,100000))
+		# 
+		# spde=inla.spde2.matern(mesh, alpha=3/2)	# exponential decaying spatial correlation
+		if (nrow(Data_work)>2000) spde <- make_mesh(Data_work, xy_cols = c("LONGITUDE", "LATITUDE"),
+		                  n_knots = 100, type = "kmeans")
 
-
-		spde=inla.spde2.matern(mesh, alpha=3/2)	# exponential decaying spatial correlation
-
+		if (nrow(Data_work)<2000) spde <- make_mesh(Data_work, xy_cols = c("LONGITUDE", "LATITUDE"),
+		                                            n_knots = 50, type = "kmeans")
+		
 		### The design matrix for the observation model
 		# Categorical variables
 		if (Include_year_effect == TRUE)
@@ -294,15 +298,15 @@
 		### Setting the spatio-temporal model
 
 		###### Specifies how to allocate the ID for each mesh
-		if (Spacetime=="NO") field.indices = inla.spde.make.index("field", n.spde=mesh$n)
-		if (Spacetime=="AR") field.indices = inla.spde.make.index("field", n.spde=mesh$n, n.group=length(YEARS))
-		if (Spacetime=="IID") field.indices = inla.spde.make.index("field", n.spde=mesh$n, n.repl=length(YEARS))
+		if (Spacetime=="NO") field.indices = inla.spde.make.index("field", n.spde=spde$mesh$n)
+		if (Spacetime=="AR") field.indices = inla.spde.make.index("field", n.spde=spde$mesh$n, n.group=length(YEARS))
+		if (Spacetime=="IID") field.indices = inla.spde.make.index("field", n.spde=spde$mesh$n, n.repl=length(YEARS))
 
 		field.group <- rep(1:length(YEARS), as.numeric(table(factor(Data_work$YEAR, levels=YEARS))))
 		field.repl <- rep(1:length(YEARS), as.numeric(table(factor(Data_work$YEAR, levels=YEARS))))
-		if (Spacetime=="AR") A <- inla.spde.make.A(mesh, loc=Coord, group=field.group)
-		if (Spacetime=="IID") A <- inla.spde.make.A(mesh, loc=Coord, repl=field.repl)
-		if (Spacetime=="NO") A <- inla.spde.make.A(mesh, loc=Coord)
+		if (Spacetime=="AR") A <- inla.spde.make.A(spde$mesh, loc=Coord, group=field.group)
+		if (Spacetime=="IID") A <- inla.spde.make.A(spde$mesh, loc=Coord, repl=field.repl)
+		if (Spacetime=="NO") A <- inla.spde.make.A(spde$mesh, loc=Coord)
 		if(Spacetime != "NADA")
 		{
 		  ## creating the list of object to be used to define covariates that I want to keep for the estimation model
@@ -331,9 +335,9 @@
 		{
 		  unlink(x=paste0(getwd(), "/", NAME), recursive = TRUE, force = TRUE)
 		  if (Spacetime=="NADA") result = inla(formula0, family="binomial", data=cbind(resp=dat$y, X.1), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=T, working.directory= NAME)
-		  if (Spacetime=="NO") result = inla(formula, family="binomial", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.family = list(link = "logit"), control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=T, working.directory= NAME)
-		  if (Spacetime=="AR") result = inla(formula2, family="binomial", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.family = list(link = "logit"), control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=T, working.directory= NAME)
-		  if (Spacetime=="IID") result = inla(formula3, family="binomial", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME)
+		  if (Spacetime=="NO") result = inla(formula, family="binomial", data=inla.stack.data(stack, spde=spde$spde), verbose=TRUE, control.family = list(link = "logit"), control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=T, working.directory= NAME)
+		  if (Spacetime=="AR") result = inla(formula2, family="binomial", data=inla.stack.data(stack, spde=spde$spde), verbose=TRUE, control.family = list(link = "logit"), control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=T, working.directory= NAME)
+		  if (Spacetime=="IID") result = inla(formula3, family="binomial", data=inla.stack.data(stack, spde=spde$spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME)
 		}
 
 		# if you have already run the model
@@ -344,13 +348,13 @@
 
 		summary(result)
 
-		spde.result = inla.spde.result(result, "field", spde, do.transf=TRUE)
+		spde.result = inla.spde.result(result, "field", spde$spde, do.transf=TRUE)
 
 		# Calculate the estimated expected surface (for the expected value of parameters, replace by NA all values that are outside the range of the Predict_data)
-		mesh_proj = inla.mesh.projector(mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
+		mesh_proj = inla.mesh.projector(spde$mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
 
 		link_y_hat_bin <- list()
-		LATENT_FIELD = matrix(result$summary.ran$field$mean, mesh$n, length(YEARS))
+		LATENT_FIELD = matrix(result$summary.ran$field$mean, spde$mesh$n, length(YEARS))
 
 		YEARS_USE = intersect(YEARS, YEARS_pred)
 		for (yr in 1:length(YEARS_USE))
@@ -375,12 +379,12 @@
 		  set.seed(Mcmc_seed)
 		  s1000 <- inla.posterior.sample(Mcmc_sample, result)
 
-		  mesh_proj = inla.mesh.projector(mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
+		  mesh_proj = inla.mesh.projector(spde$mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
 
 		  predictions <- function(x)
 		  {
 		    which_field_mesh <- grep("field", names(x$latent[,1]))
-		    field_mesh = matrix(as.numeric(x$latent[,1])[which_field_mesh], mesh$n, length(YEARS))
+		    field_mesh = matrix(as.numeric(x$latent[,1])[which_field_mesh], spde$mesh$n, length(YEARS))
 
 		    link_y_hat <- matrix(NA, nrow=length(unique(Predict_data$LONG))*length(unique(Predict_data$LAT)), ncol=length(YEARS_USE))
 		    for (yr in 1:length(YEARS_USE))
@@ -398,7 +402,6 @@
 		      # extract all coefficients
 		      all_coef <- x$latent[,1][(1+which_field_mesh[length(which_field_mesh)]):length(x$latent[,1])]
 		      names_coef <- names(all_coef)
-		      # updates in INLA output requires he following line 
 		      ifelse(length(grep(":", names(all_coef)))>0, names_coef <- substr(names_coef, start=1, stop=nchar(names_coef)-2), names_coef <- names_coef)
 		      # determine which ones are present in the current model
 		      which_coeff <- sapply(1:length(names(DESIGN.pred[[yr_pred]])), function(y) which(names(DESIGN.pred[[yr_pred]])[y] == names_coef))
@@ -432,17 +435,22 @@
 		Coord <- cbind(Pos_dat$LONGITUDE, Pos_dat$LATITUDE)					# the coordinates
 		bnd = inla.nonconvex.hull(Coord, convex=200000)		# I need to get the boundary limit of the region on interest
 
-		if (all(sort(c("EBS", "SLP", "AI", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("AI", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("EBS", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(sort(c("EBS", "SLP"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("EBS") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("SLP") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,2000000), cutoff = 75000, offset=c(50000,100000))
-		if (all(c("GOA") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
-		if (all(c("AI") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,3000000), cutoff = 30000, offset=c(50000,100000))
-
-		spde=inla.spde2.matern(mesh_pos, alpha=3/2)	# exponential decaying spatial correlation
-
+		# if (all(sort(c("EBS", "SLP", "AI", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("AI", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("EBS", "GOA"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(sort(c("EBS", "SLP"))== sort(Which_region))) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("EBS") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("SLP") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,2000000), cutoff = 75000, offset=c(50000,100000))
+		# if (all(c("GOA") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(3000000,5000000), cutoff = 50000, offset=c(100000,100000))
+		# if (all(c("AI") == Which_region)) mesh_pos = inla.mesh.2d(loc=Coord, boundary = bnd, max.edge=c(1000000,3000000), cutoff = 30000, offset=c(50000,100000))
+		# 
+		# spde=inla.spde2.matern(mesh_pos, alpha=3/2)	# exponential decaying spatial correlation
+		if (nrow(Pos_dat)>2000) spde_pos <- make_mesh(Pos_dat, xy_cols = c("LONGITUDE", "LATITUDE"),
+		                                            n_knots = 100, type = "kmeans")
+		
+		if (nrow(Pos_dat)<2000) spde_pos <- make_mesh(Pos_dat, xy_cols = c("LONGITUDE", "LATITUDE"),
+		                                            n_knots = 50, type = "kmeans")
+		
 		### The design matrix
 
 		N.bin 	<- 	dim(Pos_dat)[1]
@@ -455,15 +463,15 @@
 		### Setting the spatio-temporal model
 
 		###### Specifies how to allocate the ID for each mesh_pos
-		if (Spacetime=="NO") field.indices = inla.spde.make.index("field", n.spde=mesh_pos$n)
-		if (Spacetime=="AR") field.indices = inla.spde.make.index("field", n.spde=mesh_pos$n, n.group=length(YEARS))
-		if (Spacetime=="IID") field.indices = inla.spde.make.index("field", n.spde=mesh_pos$n, n.repl=length(YEARS))
+		if (Spacetime=="NO") field.indices = inla.spde.make.index("field", n.spde=spde_pos$mesh$n)
+		if (Spacetime=="AR") field.indices = inla.spde.make.index("field", n.spde=spde_pos$mesh$n, n.group=length(YEARS))
+		if (Spacetime=="IID") field.indices = inla.spde.make.index("field", n.spde=spde_pos$mesh$n, n.repl=length(YEARS))
 
 		field.group <- rep(1:length(YEARS), as.numeric(table(factor(Pos_dat$YEAR, levels=YEARS))))
 		field.repl <- rep(1:length(YEARS), as.numeric(table(factor(Pos_dat$YEAR, levels=YEARS))))
-		if (Spacetime=="AR") A <- inla.spde.make.A(mesh_pos, loc=Coord, group=field.group)
-		if (Spacetime=="IID") A <- inla.spde.make.A(mesh_pos, loc=Coord, repl=field.repl)
-		if (Spacetime=="NO") A <- inla.spde.make.A(mesh_pos, loc=Coord)
+		if (Spacetime=="AR") A <- inla.spde.make.A(spde_pos$mesh, loc=Coord, group=field.group)
+		if (Spacetime=="IID") A <- inla.spde.make.A(spde_pos$mesh, loc=Coord, repl=field.repl)
+		if (Spacetime=="NO") A <- inla.spde.make.A(spde_pos$mesh, loc=Coord)
 		if(Spacetime != "NADA")
 		{
 		  ## creating the list of object to be used to define covariates that I want to keep for the estimation model
@@ -492,9 +500,9 @@
 		{
 		  unlink(x=paste0(getwd(), "/", NAME_pos), recursive = TRUE, force = TRUE)
 		  if (Spacetime=="NADA") result_pos = inla(formula0, family="gaussian", data=cbind(resp=dat$y, X.1), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=FALSE, working.directory= NAME_pos)
-		  if (Spacetime=="NO") result_pos = inla(formula1, family="gaussian", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=FALSE, working.directory= NAME_pos)
-		  if (Spacetime=="AR") result_pos = inla(formula2, family="gaussian", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.inla= list(int.strategy = "eb"), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME_pos)
-		  if (Spacetime=="IID") result_pos = inla(formula3, family="gaussian", data=inla.stack.data(stack, spde=spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME_pos)
+		  if (Spacetime=="NO") result_pos = inla(formula1, family="gaussian", data=inla.stack.data(stack, spde=spde_pos$spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE), keep=FALSE, working.directory= NAME_pos)
+		  if (Spacetime=="AR") result_pos = inla(formula2, family="gaussian", data=inla.stack.data(stack, spde=spde_pos$spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.inla= list(int.strategy = "eb"), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME_pos)
+		  if (Spacetime=="IID") result_pos = inla(formula3, family="gaussian", data=inla.stack.data(stack, spde=spde_pos$spde), verbose=TRUE, control.predictor=list(A=inla.stack.A(stack), compute=TRUE), control.compute = list(dic=TRUE, cpo=TRUE, config=TRUE, openmp.strategy="large"), keep=FALSE, num.threads=2, working.directory= NAME_pos)
 		}
 
 		# if you have already run the model
@@ -504,13 +512,13 @@
 		}
 
 		summary(result_pos)
-		spde.result_pos = inla.spde.result(result_pos, "field", spde, do.transf=TRUE)
+		spde.result_pos = inla.spde.result(result_pos, "field", spde_pos$spde, do.transf=TRUE)
 
 		# Calculate the estimated expected surface (for the expected value of parameters, replace by NA all values that are outside the range of the Predict_data)
-		mesh_proj = inla.mesh.projector(mesh_pos, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
+		mesh_proj = inla.mesh.projector(spde_pos$mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
 
 		link_y_hat_pos <- list()
-		LATENT_FIELD = matrix(result_pos$summary.ran$field$mean, mesh_pos$n, length(YEARS))
+		LATENT_FIELD = matrix(result_pos$summary.ran$field$mean, spde_pos$mesh$n, length(YEARS))
 
 		YEARS_USE = intersect(YEARS, YEARS_pred)
 		for (yr in 1:length(YEARS_USE))
@@ -535,12 +543,12 @@
 		  set.seed(Mcmc_seed)
 		  s1000 <- inla.posterior.sample(Mcmc_sample, result_pos)
 
-		  mesh_proj = inla.mesh.projector(mesh_pos, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
+		  mesh_proj = inla.mesh.projector(spde$mesh, xlim=range(Predict_data$LONG), ylim=range(Predict_data$LAT), dims=c(length(unique(Predict_data$LONG)),length(unique(Predict_data$LAT))))
 
 		  predictions <- function(x)
 		  {
 		    which_field_mesh <- grep("field", names(x$latent[,1]))
-		    field_mesh = matrix(as.numeric(x$latent[,1])[which_field_mesh], mesh_pos$n, length(YEARS))
+		    field_mesh = matrix(as.numeric(x$latent[,1])[which_field_mesh], spde$mesh$n, length(YEARS))
 
 		    link_y_hat <- matrix(NA, nrow=length(unique(Predict_data$LONG))*length(unique(Predict_data$LAT)), ncol=length(YEARS_USE))
 		    for (yr in 1:length(YEARS_USE))
@@ -577,7 +585,8 @@
 		  rm(s1000, Posteriors)
 		}
 
-
+    
+	
 		###############################################################
 		############### Combine the models for prediction #############
 		###############################################################
