@@ -398,6 +398,8 @@
 		      # extract all coefficients
 		      all_coef <- x$latent[,1][(1+which_field_mesh[length(which_field_mesh)]):length(x$latent[,1])]
 		      names_coef <- names(all_coef)
+		      # updates in INLA output requires he following line 
+		      ifelse(length(grep(":", names(all_coef)))>0, names_coef <- substr(names_coef, start=1, stop=nchar(names_coef)-2), names_coef <- names_coef)
 		      # determine which ones are present in the current model
 		      which_coeff <- sapply(1:length(names(DESIGN.pred[[yr_pred]])), function(y) which(names(DESIGN.pred[[yr_pred]])[y] == names_coef))
 
@@ -556,6 +558,8 @@
 		      # extract all coefficients
 		      all_coef <- x$latent[,1][(1+which_field_mesh[length(which_field_mesh)]):length(x$latent[,1])]
 		      names_coef <- names(all_coef)
+		      # updates in INLA output requires he following line 
+		      ifelse(length(grep(":", names(all_coef)))>0, names_coef <- substr(names_coef, start=1, stop=nchar(names_coef)-2), names_coef <- names_coef)
 		      # determine which ones are present in the current model
 		      which_coeff <- sapply(1:length(names(DESIGN.pred[[yr_pred]])), function(y) which(names(DESIGN.pred[[yr_pred]])[y] == names_coef))
 
